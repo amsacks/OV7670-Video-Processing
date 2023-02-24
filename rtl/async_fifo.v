@@ -132,22 +132,21 @@ module async_fifo
             - There are two cases since a FIFO is a circular queue.
                 Case 1: read pointer > write pointer. 
                     
-                    Logic for difference: diff = (wptr_bin - rptr_bin)
+                    Logic for difference: synchronized wptr_bin - rptr_bin + POINTER DEPTH
                      
                 Case 2: read pointer <= write pointer                                             
             
-                    Logic for difference: diff = (wptr_bin - rptr_bin)
+                    Logic for difference: synchronized wptr_bin - rptr_bin
                     
    */
-   assign rbin_wbin_diff     = (rbinnext > rq2_wptr_bin) ? (rbinnext - rq2_wptr_bin)
+   assign rbin_wbin_diff     = (rbinnext > rq2_wptr_bin) ? (rq2_wptr_bin - rbinnext 
+                                                              + (1 << (AW+1)))
                                                             : (rq2_wptr_bin - rbinnext);
    assign ralmost_empty_val  = (rbin_wbin_diff <= 4);
-    
-   // 3rd: Assign to the top module output almost empty. On reset, if FIFO depth is 
-   //      greater than ALMOST_EMPTY, then r_almost_empty = 1'b0.
+
    always @(posedge r_clk or negedge r_rstn)
        begin
-           if(!r_rstn)  r_almost_empty <= 0;
+           if(!r_rstn)  r_almost_empty <= 1'b1;
            else         r_almost_empty <= ralmost_empty_val;
        end
        
@@ -202,7 +201,8 @@ module async_fifo
         endgenerate 
     
     assign wbin_rbin_diff  = (wbinnext > wq2_rptr_bin) ? (wbinnext - wq2_rptr_bin) 
-                                                        : (wq2_rptr_bin - wbinnext); 
+                                                        : (wbinnext - wq2_rptr_bin
+                                                           + (1 << (AW+1))); 
     assign walmost_full_val = (wbin_rbin_diff >=  AF);
                                                   
     always @(posedge w_clk or negedge w_rstn)
