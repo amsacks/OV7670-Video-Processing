@@ -2,18 +2,12 @@
 `default_nettype none
 
 /*
-<<<<<<< HEAD
  *  Reads video processed data from vp_top via
  *  handshake; Generates appropriate BRAM write
  *  address based off handshake; vga_top reads
  *  from BRAM 
  * 
-=======
- *  Reads video processed data from vp_top
- *  and writes to BRAM with an address generator;
- *  Wraps vp_top and vga_top  
  *
->>>>>>> ded3eaa10a7e3a16233dac04935e1546e8c7710f
  */
 
 module mem_top
@@ -76,9 +70,4 @@ module mem_top
         .o_bram_data(o_vga_data   )
      );
     
-    
-<<<<<<< HEAD
 endmodule
-=======
-endmodule
->>>>>>> ded3eaa10a7e3a16233dac04935e1546e8c7710f
