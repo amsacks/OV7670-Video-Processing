@@ -4,7 +4,9 @@
 /*
  *  Pipelines a MAC operation
  *  by convolving a 2D Kernel 
- *  that specifies a sobel filter
+ *  that specifies a sobel filter;
+ *  thresholding is used to compute
+ *  whether a pixel is an edge (WHITE) or not (BLACK)
  *
  */
 

@@ -7,7 +7,6 @@
  *  address based off handshake; vga_top reads
  *  from BRAM 
  * 
- *
  */
 
 module mem_top
@@ -18,7 +17,7 @@ module mem_top
         input wire i_rstn,
         
         // Handshake between mem_top and vp_top
-        output wire          o_data_ready,
+        output reg           o_data_ready,
         input wire           i_data_valid,
         input wire [DW-1:0]  i_data,
 
@@ -27,28 +26,47 @@ module mem_top
         output wire [DW-1:0] o_vga_data
     );
     
-    reg        r_data_valid;   
-    reg [11:0] r_vp_data;
-    reg [18:0] r_vp_addr; 
     
-    // Start reading vp output FIFO if there's data
-    assign o_data_ready = i_data_valid;
+    // Control Handshake procedure 
+    localparam IDLE = 0,
+                TRANSFER = 1;
+    reg state;
+    reg             r_bram_wr; 
+    reg [18: 0]     r_vp_addr; 
     
-    // BRAM Write Address Generator 
     always @(posedge i_clk)
     begin
-        if(!i_rstn) 
+        if(!i_rstn)
         begin
-            r_vp_addr    <= 0; 
-            r_data_valid <= 0;
+            state        <= IDLE;
+            o_data_ready <= 0;
+            r_bram_wr <= 0;
+            r_vp_addr <= 0; 
         end 
         else begin
-            r_data_valid <=  0;
-            if(i_data_valid) begin
-                r_vp_addr    <= (r_vp_addr == 307199) ? 0 : r_vp_addr + 1'b1;
-                r_data_valid <= 1'b1; 
+            case(state)
+            IDLE: begin
+                
+                o_data_ready <= 0; 
+                r_bram_wr    <= 0;
+                
+                if(i_data_valid) begin
+                    state        <= TRANSFER;
+                    r_bram_wr    <= 1'b1;
+                    o_data_ready <= 1'b1; 
+                end
+                    
             end
-        end
+            TRANSFER: begin
+               
+                state        <= IDLE;
+                r_bram_wr    <= 0;
+                o_data_ready <= 0;
+                r_vp_addr <= (r_vp_addr == 307199) ? 0 : r_vp_addr + 1'b1;
+
+            end 
+            endcase
+        end 
     end
     
     mem_bram
@@ -58,7 +76,7 @@ module mem_top
      (
         // BRAM Write signals 
         .i_wclk(i_clk             ),
-        .i_wr(r_data_valid        ), 
+        .i_wr(r_bram_wr           ), 
         .i_wr_addr(r_vp_addr      ),
         .i_bram_data(i_data       ),
         .i_bram_en(1'b1           ),

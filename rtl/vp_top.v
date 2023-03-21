@@ -124,8 +124,8 @@ module vp_top
 
     sync_fifo
     #(  .DW(DW),
-        .AW(4),
-        .AFW(3),
+        .AW(10),
+        .AFW(9),
         .AEW(1)         )
     vp_outputFIFO
     (

@@ -1,12 +1,12 @@
 `timescale 1ns / 1ns
 
 /* 
- *  A self-check testbench that verifies
- *  handshake transactions between cam_top/vp_top, 
- *  vp_top/mem_top (no deadlocks or livelocks); multi-clock
- *  reset in top module; pixel data sent to vp_top is 
- *  written to BRAM  
- *
+ *  Self-check test bench that verifies the
+ *  pixel data retrieved from cam_top is 
+ *  correctly streamed to vp_top, then converted to grayscale,
+ *  streamed to mem_top and then is read sequentially in
+ *  BRAM; self-check on multi-clock reset in top
+ *  
  */
  
 module top_tb();
@@ -23,18 +23,15 @@ module top_tb();
     localparam T_P_CLK = 41.667;
     localparam F_P_CLK = 24_000_000;
 
-    // Number of clocks for btn debounce
+    // Number of clocks for button debounce
     localparam DELAY = 10; 
     
     // VGA Frame Timing 
     localparam nFrames = 2,
-                nRows   = 480,
-                nPixelsPerRow = 640;  
-    
+                nRows   = 640,
+                nPixelsPerRow = 480;  
     
     // top I/O signals
-    logic       vga_clk;
-
     logic       i_top_clk;
     logic       i_top_rst;
     
@@ -64,9 +61,9 @@ module top_tb();
     
     logic  [11:0] remove_last_byte; 
       
-    // Instantiate unit under test 
+    // Instantiate device under test 
     top
-    uut
+    DUT
     (   
         .i_top_clk(i_top_clk                ),
         .i_top_rst(i_top_rst                ),
@@ -98,7 +95,6 @@ module top_tb();
         begin
             i_top_clk = 0;
             i_top_pclk= 0;
-            vga_clk   = 0; 
             i_top_rst = 0;
             
             i_top_cam_start = 0;
@@ -107,15 +103,14 @@ module top_tb();
         end 
     
     // Create Clocks
-    always #(T_SYS_CLK/2) i_top_clk = ~i_top_clk; 
-    always #(T_VGA_CLK/2) vga_clk   = ~vga_clk;
+    always #(T_SYS_CLK/2) i_top_clk = ~i_top_clk;
     always #(T_P_CLK/2)   i_top_pclk= ~i_top_pclk; 
     
     initial
     begin: TB 
         integer frame, row, pix_byte;  
         
-        // Sample a '0' from i_top_rst as to pass assertion $fell(uut.top_btn_db.o_btn_db)
+        // Sample a '0' from i_top_rst as to pass assertion $fell(DUT.top_btn_db.o_btn_db)
         repeat(DELAY+1) @(posedge i_top_clk); 
         
         // Start simulation in known state
@@ -126,19 +121,12 @@ module top_tb();
         
         // Skip initialization (tested in cam_init_tb) and start first frame 
         @(posedge i_top_pclk) 
-            force uut.OV7670_cam.o_cam_done = 1'b1; 
+            force DUT.OV7670_cam.o_cam_done = 1'b1; 
         FrameStart(); 
         
-        // Pad for first frame - BRAM has a one clock cycle delay for reads
-        BRAM_data.push_front( {12'h000} );
-        
-        /*
-            Simulate VGA Frame Timing
-            
-            http://web.mit.edu/6.111/www/f2016/tools/OV7670_2006.pdf (page 7) 
-            
-            Note: tline = 784*tpclk
-        */
+        //    Simulate VGA Frame Timing   
+        //    http://web.mit.edu/6.111/www/f2016/tools/OV7670_2006.pdf (page 7)   
+        //    Note: tline = 784*tpclk
         
         for(frame = 0; frame < nFrames; frame=frame+1)
         begin
@@ -164,9 +152,9 @@ module top_tb();
                         // Second byte, add to queue for testing 
                         else
                         begin
-                            i_top_pix_byte = first_pixel_byte[7:0];         //{ $urandom() % 256 };              
-                            pixel_data_queue.push_front(first_pixel_byte);  // { first_pixel_byte[3:0] , i_top_pix_byte });
-                            BRAM_data.push_front(first_pixel_byte);         //{first_pixel_byte[3:0] , i_top_pix_byte } ); 
+                            i_top_pix_byte = first_pixel_byte[7:0];                      
+                            pixel_data_queue.push_front(first_pixel_byte);  
+                            BRAM_data.push_front(first_pixel_byte);         
                         end
                     end       
                       
@@ -176,18 +164,11 @@ module top_tb();
                 @(negedge i_top_pclk) i_top_pix_href = 0;
                 repeat(144*2) @(posedge i_top_pclk); 
             end 
-            
-            // Remove last data (at address 307200 -> invalid)
-            remove_last_byte = BRAM_data.pop_front(); 
                         
             // Last row -> end of frame
             i_top_pix_vsync = 0; 
             repeat(10*784*2) @(negedge i_top_pclk); 
-            
-            // Pad for next frame 
-            BRAM_data.push_front( {12'h000} );
-            BRAM_data.push_front( {12'h000} );
-            
+                   
             // Finish sim
             if(frame == nFrames - 1)
             begin                
@@ -195,26 +176,22 @@ module top_tb();
                 $finish();    
             end    
         end 
-        
+
     end // testbench 
     
-
-
-
-    /**
-        1st: Top Reset to Multi-clock resets 
-    **/ 
     
+    // 1st: Top Reset to Multi-clock resets 
+     
     // Simulate top rst button debounce 
     task TopResetDb();
     begin
         i_top_rst = 0; 
         @(posedge i_top_clk);
-        assert(uut.top_btn_db.i_btn_in == 1'b1);
+        assert(DUT.top_btn_db.i_btn_in == 1'b1);
         
         i_top_rst = 1'b1; 
         repeat(DELAY+1) @(posedge i_top_clk);
-        assert(uut.top_btn_db.i_btn_in == 0);
+        assert(DUT.top_btn_db.i_btn_in == 0);
         
         i_top_rst = 0; 
     end
@@ -223,8 +200,8 @@ module top_tb();
     // Verify that top rst to mutli-clock reset are asserted/deasserted properly
     property top_rst_db_p;
         @(posedge i_top_clk) $fell(i_top_rst) 
-                                |-> $fell(uut.top_btn_db.o_btn_db)
-                                ##(DELAY+1) $rose(uut.top_btn_db.o_btn_db);
+                                |-> $fell(DUT.top_btn_db.o_btn_db)
+                                ##(DELAY+1) $rose(DUT.top_btn_db.o_btn_db);
     endproperty
     top_rst_assert_db_p_chk: assert property(top_rst_db_p)
                                 $display("Multi-clock resets pass.\n"); 
@@ -234,9 +211,9 @@ module top_tb();
     // Verify that negedge multi-clock resets are asserted once top rst debounce samples '1'  
     always @(posedge i_top_clk)
     begin
-        if($fell(uut.top_btn_db.o_btn_db))
+        if($fell(DUT.top_btn_db.o_btn_db))
         begin
-            assert(uut.OV7670_cam.i_rstn_clk == 0) 
+            assert(DUT.OV7670_cam.i_rstn_clk == 0) 
                 $display("100 MHz Multi-clock reset is 0.\n"); 
             else 
                 $fatal("100 MHz MultiYou are not receiving the ACK after the addres-clock reset is NOT 0.\n");
@@ -244,29 +221,15 @@ module top_tb();
     end
     always @(posedge i_top_pclk)
     begin
-        if($fell(uut.top_btn_db.o_btn_db))
+        if($fell(DUT.top_btn_db.o_btn_db))
         begin
-            assert(uut.OV7670_cam.i_rstn_pclk == 0) 
+            assert(DUT.OV7670_cam.i_rstn_pclk == 0) 
                 $display("24 MHz Multi-clock reset is 0.\n");
             else
                 $fatal("24 MHz Multi-clock reset is NOT 0.\n");
         end
     end
-    always @(posedge uut.w_clk25m)
-    begin
-        if($fell(uut.top_btn_db.o_btn_db))
-        begin
-            assert(uut.display_interface.i_rstn_clk25m == 0)
-                $display("25 MHz Multi-clock reset is 0.\n");
-            else
-                $fatal("25 MHz Multi-clock reset is NOT 0.\n");
-        end 
-    end        
-     
-    /**
-        2nd: Verify that pixel data captured gets fed into BRAM
-    **/
-    
+
     task FrameStart();    // VGA Timing of OV7670
     begin
         i_top_pix_vsync = 1'b1; 
@@ -275,53 +238,190 @@ module top_tb();
         repeat(17*784*2) @(posedge i_top_pclk); 
     end
     endtask    
-    
-    // Check that BRAM gets fed the right data, stop simulation if any error occurs 
-    logic [11:0] BRAM_actual_data;
-    logic [11:0] BRAM_expected_data;
 
+    always @(posedge DUT.w_clk25m)
+    begin
+        if($fell(DUT.top_btn_db.o_btn_db))
+        begin
+            assert(DUT.display_interface.i_rstn_clk25m == 0)
+                $display("25 MHz Multi-clock reset is 0.\n");
+            else
+                $fatal("25 MHz Multi-clock reset is NOT 0.\n");
+        end 
+    end 
+           
+
+    //   2nd: Verify that all captured pixel data gets sent to vp_top
+    //          - Check that Async FIFO is never empty or full         
+     
+    // Never full
     always @(posedge i_top_pclk)
     begin
-        if($rose(uut.OV7670_cam.o_pix_wr))  
+        if(DUT.r2_rstn_pclk)
         begin
-                BRAM_actual_data   = uut.pixel_memory.i_bram_data;
-                BRAM_expected_data = pixel_data_queue.pop_back();
-                  
-                assert(BRAM_actual_data == BRAM_expected_data)
-                    $display("BRAM recieved pixel byte 0x%h\n", BRAM_actual_data);
+
+            assert(DUT.OV7670_cam.cam_afifo.w_full !== 1'b1)
+            else
+                $fatal(1, "Async FIFO should not be full.\n"); 
+          
+            
+        end 
+    end 
+    
+    // Never empty after a read
+    always @(posedge i_top_clk)
+    begin
+        if(DUT.r2_rstn_top_clk)  
+        begin
+            if(DUT.w_vp_top_data_ready)
+                assert(DUT.OV7670_cam.cam_afifo.r_empty !== 1'b1)
                 else
-                    $fatal("BRAM did not recieve pixel byte. Expected Data: 0x%h, Actual Data: 0x%h\n"
-                        , BRAM_expected_data, BRAM_actual_data);
+                    $fatal(1, "Async FIFO should not be empty.\n"); 
         end
 
     end 
-
-    /**
-        3rd: Verify that VGA reads match data written to BRAM
-    **/
+    
+    // Verify that pixel data captured is correct
+    // Verify pixel data is sent to vp_top via handshake
+    logic [11:0] expected_cam_data;
+    logic [11:0] actual_cam_data;
+    logic [11:0] gray_data_queue [$]; 
+    
+    always @(posedge i_top_clk)
+    begin
+        if(DUT.r2_rstn_top_clk)
+        begin
+            if(DUT.OV7670_cam.i_data_ready & DUT.OV7670_cam.o_cam_data_valid)
+            begin
+                 
+                
+                expected_cam_data = pixel_data_queue.pop_back(); 
+                actual_cam_data = $past(DUT.w_cam_top_data);
+                     
+                assert(expected_cam_data == actual_cam_data)
+                    //$display("0x%h is sent to vp_top\n", actual_cam_data);
+                else
+                    $fatal(1, "Expected Cam Data 0x%h\nActual Cam Data 0x%h\n",
+                    expected_cam_data, actual_cam_data);
+         
+                gray_data_queue.push_front(expected_cam_data);
+         
+            end
+        end    
+    end
+    
+    // 3rd: Check that all data retrieved by vp_top is converted to gray scale -> sobel 
+    logic [11:0] expected_gray_data;
+    logic [11:0] cam_to_vp_data;
+    logic [11:0] actual_gray_data;
+    logic [7:0]  R_tb, G_tb, B_tb; 
    
-    // Verify that data written to BRAM is read sequentially
-    wire [9:0]  VGA_x = uut.display_interface.o_VGA_x;
-    wire [9:0]  VGA_y = uut.display_interface.o_VGA_y;
+    always @(posedge i_top_clk)
+    begin
+        if(DUT.r2_rstn_top_clk)
+        begin
+            if($fell(DUT.videoprocessing_sobel.q_data_valid))
+            begin
+                cam_to_vp_data = gray_data_queue.pop_back(); 
+                
+                R_tb = cam_to_vp_data[11:8] << 4; 
+                G_tb = cam_to_vp_data[7:4]  << 4;
+                B_tb = cam_to_vp_data[3:0]  << 4; 
+                
+                expected_gray_data = (R_tb >> 2) + (R_tb >> 5) +
+                                        (G_tb >> 1) + (G_tb >> 4) + 
+                                            (B_tb >> 4) + (B_tb >> 5); 
+                
+                actual_gray_data = DUT.videoprocessing_sobel.w_gray_data;
+                
+                assert(expected_gray_data == actual_gray_data)
+                    //$display("RGB Cam Data -> Grayscaled: 0x%h\n", actual_gray_data);
+                else
+                    $fatal(1, "Expected grayscaled: 0x%h\nActual grayscaled: 0x%h\n", 
+                        expected_gray_data, actual_gray_data);  
+         
+            end 
+        end 
+    end 
+
+    //  5th: Verify that all sobel-filtered data is sent to mem_top via handshake
+      
+    // Just store whatever data results from sobel filter
+    logic [11:0] BRAM_data_queue [$];
+    logic [11:0] sobel_data_queue [$];
+    always @(posedge i_top_clk)
+    begin
+    
+        if(DUT.videoprocessing_sobel.vp_sobel.o_valid)
+        begin
+            sobel_data_queue.push_front(DUT.videoprocessing_sobel.vp_sobel.o_data);
+            BRAM_data_queue.push_front(DUT.videoprocessing_sobel.vp_sobel.o_data);
+        end 
+        
+    end 
+    
+    // Check vp_top/mem_top handshake
+    logic [11:0] expected_vp_top_data;
+    logic [11:0] actual_vp_top_data;
+    
+    always @(posedge i_top_clk)
+    begin
+        if(DUT.w_mem_top_data_ready & DUT.w_mem_top_data_valid)
+        begin
+            expected_vp_top_data = sobel_data_queue.pop_back(); 
+            actual_vp_top_data = DUT.w_vp_top_data;
+                       
+            assert(expected_vp_top_data === actual_vp_top_data)
+                //$display("Sobel-filtered data 0x%h\n", actual_vp_top_data);
+            else
+                $fatal(1, "Expected sobel-filtered data 0x%h\nActual sobel-filtered data 0x%h\n",
+                        expected_vp_top_data, actual_vp_top_data); 
+  
+        end
+    end
+
+    // 6th: Verify that data written to BRAM is read sequentially
+
+    wire [9:0]  VGA_x = DUT.display_interface.o_VGA_x;
+    wire [9:0]  VGA_y = DUT.display_interface.o_VGA_y;
     
     logic [11:0] expected_VGA_read;
     logic [11:0] actual_VGA_read;
     
-    always @(posedge uut.w_clk25m)
+    always @(posedge DUT.w_clk25m)
     begin
         // one clock cycle BRAM delay, shift X to right by 1
         if( (((VGA_x > 0 && VGA_x < 640) && (VGA_y < 480))
             || ((VGA_x == 799) && ((VGA_y == 524) || (VGA_y < 480))))
-            && uut.display_interface.r_SM_state == 'd2)
+            && DUT.display_interface.r_SM_state == 'd2)
         begin        
-            expected_VGA_read   = BRAM_data.pop_back(); 
-            actual_VGA_read     = uut.display_interface.i_pix_data;
+            expected_VGA_read   = BRAM_data_queue.pop_back(); 
+            actual_VGA_read     = DUT.display_interface.i_pix_data;
             assert(actual_VGA_read === expected_VGA_read)
-                $display("VGA Pixel Read Byte: 0x%h.\n", actual_VGA_read); 
+                //$display("VGA Pixel Read Byte: 0x%h.\n", actual_VGA_read); 
             else
-                $fatal("Expected VGA Pixel Read: 0x%h, Actual VGA Pixel Byte Read: 0x%h\n",
+                $fatal(1, "Expected VGA Pixel Read: 0x%h, Actual VGA Pixel Byte Read: 0x%h\n",
                       expected_VGA_read, actual_VGA_read);
         end
     end 
+
+
+   // Check that all handshakes have asserted VALID while READY is HIGH
+    property handshake_cam_top_to_vp_top_p;
+        @(posedge i_top_clk) $rose(DUT.w_cam_top_data_valid) 
+                                |=> DUT.w_cam_top_data_valid[*1:$] 
+                                    ##0 (DUT.w_vp_top_data_ready); 
+    endproperty
+
+    assert property(handshake_cam_top_to_vp_top_p);
+
+    property handshake_vp_top_to_mem_top_p; 
+        @(posedge i_top_clk) $rose(DUT.w_mem_top_data_valid)
+                                |=> DUT.w_mem_top_data_valid[*1:$]
+                                    ##0 (DUT.w_mem_top_data_ready); 
+    endproperty
+    
+    assert property (handshake_vp_top_to_mem_top_p); 
+
 
 endmodule
