@@ -344,7 +344,7 @@ module top_tb();
         end 
     end 
 
-    //  5th: Verify that all sobel-filtered data is sent to mem_top via handshake
+    //  4th: Verify that all sobel-filtered data is sent to mem_top via handshake
       
     // Just store whatever data results from sobel filter
     logic [11:0] BRAM_data_queue [$];
@@ -380,7 +380,7 @@ module top_tb();
         end
     end
 
-    // 6th: Verify that data written to BRAM is read sequentially
+    // 5th: Verify that data written to BRAM is read sequentially
 
     wire [9:0]  VGA_x = DUT.display_interface.o_VGA_x;
     wire [9:0]  VGA_y = DUT.display_interface.o_VGA_y;
@@ -404,7 +404,6 @@ module top_tb();
                       expected_VGA_read, actual_VGA_read);
         end
     end 
-
 
    // Check that all handshakes have asserted VALID while READY is HIGH
     property handshake_cam_top_to_vp_top_p;
