@@ -8,6 +8,9 @@ module top
         input wire  i_top_cam_start, 
         output wire o_top_cam_done, 
             
+        input wire i_top_inc_sobel_thresh,
+        input wire i_top_dec_sobel_thresh,
+
         // I/O to camera
         input wire       i_top_pclk, 
         input wire [7:0] i_top_pix_byte,
@@ -118,7 +121,22 @@ module top
         .o_cam_data_valid(w_cam_top_data_valid),
         .o_cam_data(w_cam_top_data)
     );
+    
+
+    wire [11:0] w_sobel_thresh; 
+    
+    top_user_control
+    control_filters
+    (
+        .i_clk(i_top_clk),
+        .i_rstn(r2_rstn_top_clk),
+
+        .i_inc_sobel_thresh(i_top_inc_sobel_thresh),
+        .i_dec_sobel_thresh(i_top_dec_sobel_thresh),
         
+        .o_sobel_thresh(w_sobel_thresh)
+    );
+
     vp_top
     #(  .DW(12),
         .RL(640)    ) 
@@ -126,6 +144,8 @@ module top
     (
         .i_clk(i_top_clk),
         .i_rstn(r2_rstn_top_clk),
+
+        .i_threshold(w_sobel_thresh),
 
         // Handshake with cam_top
         .o_data_ready(w_vp_top_data_ready),

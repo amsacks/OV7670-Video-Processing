@@ -14,6 +14,9 @@ module conv
     #(parameter DW = 12)
     (   input wire             i_clk,
         input wire             i_rstn,  
+
+        input wire [11:0]      i_sobel_thresh,
+
         input wire [9*DW-1: 0] i_data,
         input wire             i_valid, 
         
@@ -134,7 +137,7 @@ module conv
         o_valid <= 0; 
     end
     else begin
-        o_data  <= (convolved_data_int > 1800) ? {(DW){1'b1}} : 0; 
+        o_data  <= (convolved_data_int > i_sobel_thresh) ? {(DW){1'b1}} : 0; 
         o_valid <=  convolved_data_int_valid;     
     end
 

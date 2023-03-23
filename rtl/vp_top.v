@@ -19,6 +19,8 @@ module vp_top
         input wire i_clk,
         input wire i_rstn,
 
+        input wire [11:0] i_threshold,
+
         // Cam_top interface
         output reg          o_data_ready,
         input wire          i_data_valid,
@@ -115,6 +117,9 @@ module vp_top
     (   
         .i_clk(i_clk),
         .i_rstn(i_rstn),  
+
+        .i_sobel_thresh(i_threshold),
+
         .i_data(w_pixel_data),
         .i_valid(w_pixel_valid), 
         
