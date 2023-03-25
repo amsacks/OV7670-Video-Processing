@@ -11,11 +11,11 @@
  */
 
 module conv
-    #(parameter DW = 12)
+    #(parameter DW = 8)
     (   input wire             i_clk,
         input wire             i_rstn,  
 
-        input wire [11:0]      i_sobel_thresh,
+        input wire [7:0]       i_sobel_thresh,
 
         input wire [9*DW-1: 0] i_data,
         input wire             i_valid, 
@@ -69,7 +69,7 @@ module conv
         kernel2[6] = -1; 
         kernel2[7] = -2; 
         kernel2[8] = -1; 
-    end 
+    end
     
     always @(posedge i_clk)
     if(!i_rstn)

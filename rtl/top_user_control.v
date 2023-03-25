@@ -9,7 +9,7 @@ module top_user_control
         input wire i_inc_sobel_thresh,
         input wire i_dec_sobel_thresh,
 
-        output reg [11:0] o_sobel_thresh
+        output reg [7:0] o_sobel_thresh
     );
 
     wire w_inc_sobel_thresh;
@@ -84,7 +84,7 @@ module top_user_control
         begin
             state_inc      <= IDLE;
             state_dec      <= IDLE;  
-            o_sobel_thresh <= 0;      
+            o_sobel_thresh <= 16;      
         end
         else begin
 
@@ -95,10 +95,10 @@ module top_user_control
                     state_inc <= ACTIVE_INC;
             end
             ACTIVE_INC: begin
-                if((o_sobel_thresh + 200) >= {(12){1'b1}})
+                if((o_sobel_thresh + 1) >= {(8){1'b1}})
                     o_sobel_thresh <= o_sobel_thresh; 
                 else 
-                    o_sobel_thresh <= o_sobel_thresh + 200; 
+                    o_sobel_thresh <= o_sobel_thresh + 1; 
 
                 state_inc      <= IDLE;
             end
@@ -111,10 +111,10 @@ module top_user_control
                     state_dec <= ACTIVE_DEC; 
             end
             ACTIVE_DEC: begin
-                if((o_sobel_thresh - 200) <= 0)
+                if((o_sobel_thresh - 1) <= 0)
                     o_sobel_thresh <= 0;
                 else
-                    o_sobel_thresh <= o_sobel_thresh - 200; 
+                    o_sobel_thresh <= o_sobel_thresh - 1; 
 
                 state_dec      <= IDLE;
             end

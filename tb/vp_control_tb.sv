@@ -13,7 +13,7 @@ module vp_control_tb();
     localparam T_CLK = 10;
 
     // Data Width and Row Length
-    localparam DW = 12;
+    localparam DW = 8;
     localparam RL = 640; 
 
     // I/O signals of vp_control

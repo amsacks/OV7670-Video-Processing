@@ -24,7 +24,7 @@ module top_tb();
     localparam F_P_CLK = 24_000_000;
 
     // Number of clocks for button debounce
-    localparam DELAY = 10; 
+    localparam DELAY = 240_000; 
     
     // VGA Frame Timing 
     localparam nFrames = 2,
@@ -37,6 +37,9 @@ module top_tb();
     
     logic       i_top_cam_start;
     logic       o_top_cam_done;
+    
+    logic       i_top_inc_sobel_thresh;
+    logic       i_top_dec_sobel_thresh;
     
     logic       i_top_pclk;
     logic [7:0] i_top_pix_byte;
@@ -54,13 +57,6 @@ module top_tb();
     logic       o_top_vsync;
     logic       o_top_hsync;
     
-    
-    logic [11:0] pixel_data_queue [$];
-    logic [11:0] BRAM_data [$];
-    logic [11:0] first_pixel_byte;
-    
-    logic  [11:0] remove_last_byte; 
-      
     // Instantiate device under test 
     top
     DUT
@@ -71,6 +67,10 @@ module top_tb();
         // I/O for cam initalization 
         .i_top_cam_start(i_top_cam_start    ), 
         .o_top_cam_done(o_top_cam_done      ), 
+        
+        // Buttons for sobel threshold
+        .i_top_inc_sobel_thresh(i_top_inc_sobel_thresh ),
+        .i_top_dec_sobel_thresh(i_top_dec_sobel_thresh ), 
         
         // I/O to cameraInternal Clock
         .i_top_pclk(i_top_pclk              ), 
@@ -91,11 +91,18 @@ module top_tb();
         .o_top_vga_hsync(o_top_hsync        )
     );
 
+    // Testbench queue
+    logic [11:0] pixel_data_queue [$];
+    logic [11:0] first_pixel_byte;
+
     initial
         begin
             i_top_clk = 0;
             i_top_pclk= 0;
             i_top_rst = 0;
+            
+            i_top_dec_sobel_thresh = 0;
+            i_top_inc_sobel_thresh = 0;
             
             i_top_cam_start = 0;
             i_top_pix_vsync = 0;
@@ -117,7 +124,7 @@ module top_tb();
         TopResetDb();      
         
         i_top_cam_start = 1'b1; 
-        repeat(10) @(posedge i_top_clk);
+        repeat(DELAY) @(posedge i_top_clk);
         
         // Skip initialization (tested in cam_init_tb) and start first frame 
         @(posedge i_top_pclk) 
@@ -153,8 +160,7 @@ module top_tb();
                         else
                         begin
                             i_top_pix_byte = first_pixel_byte[7:0];                      
-                            pixel_data_queue.push_front(first_pixel_byte);  
-                            BRAM_data.push_front(first_pixel_byte);         
+                            pixel_data_queue.push_front(first_pixel_byte);        
                         end
                     end       
                       
@@ -310,32 +316,42 @@ module top_tb();
         end    
     end
     
-    // 3rd: Check that all data retrieved by vp_top is converted to gray scale -> sobel 
-    logic [11:0] expected_gray_data;
+    // 3rd: Check that all data retrieved by vp_top is converted to 8-bit grayscaled
     logic [11:0] cam_to_vp_data;
-    logic [11:0] actual_gray_data;
-    logic [7:0]  R_tb, G_tb, B_tb; 
-   
+
+    logic [7:0]  R_tb;
+    logic [7:0]  G_tb;
+    logic [7:0]  B_tb; 
+    logic [11:0] gray_data;
+    logic [7:0]  expected_gray_data; 
+    logic [7:0]  actual_gray_data;   
+    
     always @(posedge i_top_clk)
     begin
         if(DUT.r2_rstn_top_clk)
         begin
-            if($fell(DUT.videoprocessing_sobel.q_data_valid))
+            if($fell(DUT.videoprocessing_sobel.r_data_valid))
             begin
+            
                 cam_to_vp_data = gray_data_queue.pop_back(); 
                 
+                // RGB444 into Q4.4 format
                 R_tb = cam_to_vp_data[11:8] << 4; 
                 G_tb = cam_to_vp_data[7:4]  << 4;
                 B_tb = cam_to_vp_data[3:0]  << 4; 
                 
-                expected_gray_data = (R_tb >> 2) + (R_tb >> 5) +
-                                        (G_tb >> 1) + (G_tb >> 4) + 
-                                            (B_tb >> 4) + (B_tb >> 5); 
+                // Convert RGB444 into 8-bit grayscale
+                gray_data =  (R_tb >> 2) + (R_tb >> 5) +
+                             (G_tb >> 1) + (G_tb >> 4) + 
+                             (B_tb >> 4) + (B_tb >> 5); 
+                                            
+                // Convert fixed-point Q4.4 grayscaled data into an 8-bit                     
+                expected_gray_data = gray_data[11:4];
                 
-                actual_gray_data = DUT.videoprocessing_sobel.w_gray_data;
+                actual_gray_data = DUT.videoprocessing_sobel.w_gray_byte;
                 
                 assert(expected_gray_data == actual_gray_data)
-                    //$display("RGB Cam Data -> Grayscaled: 0x%h\n", actual_gray_data);
+                    $display("8-bit Grayscaled: 0x%h\n", actual_gray_data);
                 else
                     $fatal(1, "Expected grayscaled: 0x%h\nActual grayscaled: 0x%h\n", 
                         expected_gray_data, actual_gray_data);  
@@ -343,26 +359,26 @@ module top_tb();
             end 
         end 
     end 
-
+    
     //  4th: Verify that all sobel-filtered data is sent to mem_top via handshake
       
     // Just store whatever data results from sobel filter
-    logic [11:0] BRAM_data_queue [$];
-    logic [11:0] sobel_data_queue [$];
+    logic [7:0] BRAM_data_queue  [$];
+    logic [7:0] sobel_data_queue [$];
     always @(posedge i_top_clk)
     begin
     
-        if(DUT.videoprocessing_sobel.vp_sobel.o_valid)
+        if(DUT.videoprocessing_sobel.w_sobel_data_valid)
         begin
-            sobel_data_queue.push_front(DUT.videoprocessing_sobel.vp_sobel.o_data);
-            BRAM_data_queue.push_front(DUT.videoprocessing_sobel.vp_sobel.o_data);
+            sobel_data_queue.push_front(DUT.videoprocessing_sobel.w_sobel_data);
+            BRAM_data_queue.push_front(DUT.videoprocessing_sobel.w_sobel_data);
         end 
         
     end 
     
     // Check vp_top/mem_top handshake
-    logic [11:0] expected_vp_top_data;
-    logic [11:0] actual_vp_top_data;
+    logic [7:0] expected_vp_top_data;
+    logic [7:0] actual_vp_top_data;
     
     always @(posedge i_top_clk)
     begin
@@ -372,7 +388,7 @@ module top_tb();
             actual_vp_top_data = DUT.w_vp_top_data;
                        
             assert(expected_vp_top_data === actual_vp_top_data)
-                //$display("Sobel-filtered data 0x%h\n", actual_vp_top_data);
+                $display("Sobel-filtered data 0x%h\n", actual_vp_top_data);
             else
                 $fatal(1, "Expected sobel-filtered data 0x%h\nActual sobel-filtered data 0x%h\n",
                         expected_vp_top_data, actual_vp_top_data); 
@@ -385,8 +401,8 @@ module top_tb();
     wire [9:0]  VGA_x = DUT.display_interface.o_VGA_x;
     wire [9:0]  VGA_y = DUT.display_interface.o_VGA_y;
     
-    logic [11:0] expected_VGA_read;
-    logic [11:0] actual_VGA_read;
+    logic [7:0] expected_VGA_read;
+    logic [7:0] actual_VGA_read;
     
     always @(posedge DUT.w_clk25m)
     begin
@@ -398,7 +414,7 @@ module top_tb();
             expected_VGA_read   = BRAM_data_queue.pop_back(); 
             actual_VGA_read     = DUT.display_interface.i_pix_data;
             assert(actual_VGA_read === expected_VGA_read)
-                //$display("VGA Pixel Read Byte: 0x%h.\n", actual_VGA_read); 
+                $display("VGA Pixel Read Byte: 0x%h.\n", actual_VGA_read); 
             else
                 $fatal(1, "Expected VGA Pixel Read: 0x%h, Actual VGA Pixel Byte Read: 0x%h\n",
                       expected_VGA_read, actual_VGA_read);

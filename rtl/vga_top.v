@@ -35,18 +35,18 @@ module vga_top
         output reg  [3:0]   o_VGA_b, 
         
         // VGA read from BRAM 
-        input  wire [11:0]  i_pix_data, 
+        input  wire [7:0]  i_pix_data, 
         output reg  [18:0] o_pix_addr
     );
     
     vga_driver
-    #(  .hDisp(640), 
-        .hFp(16), 
-        .hPulse(96), 
-        .hBp(48), 
-        .vDisp(480), 
-        .vFp(10), 
-        .vPulse(2),
+    #(  .hDisp(640              ), 
+        .hFp(16                 ), 
+        .hPulse(96              ), 
+        .hBp(48                 ), 
+        .vDisp(480              ), 
+        .vFp(10                 ), 
+        .vPulse(2               ),
         .vBp(33)                )
     vga_timing_signals
     (   .i_clk(i_clk25m         ),
@@ -60,9 +60,7 @@ module vga_top
         .o_hsync(o_VGA_hsync    )
     );
     
-    reg [3:0]   r_VGA_R;
-    reg [3:0]   r_VGA_G; 
-    reg [3:0]   r_VGA_B;
+    // FSM to control BRAM reads
     reg [1:0]   r_SM_state;
     localparam [1:0]    WAIT_1  = 0,
                         WAIT_2  = 'd1,  
@@ -76,33 +74,35 @@ module vga_top
     end
     else
         case(r_SM_state)
+        
         // Skip two frames
         WAIT_1: r_SM_state <= (o_VGA_x == 640 && o_VGA_y == 480) ? WAIT_2 : WAIT_1;
         WAIT_2: r_SM_state <= (o_VGA_x == 640 && o_VGA_y == 480) ? READ : WAIT_2; 
+        
         READ: begin
             // Currently active video 
             if((o_VGA_y < 480) && (o_VGA_x < 639))
                 o_pix_addr <= (o_pix_addr == 307199) ? 0 : o_pix_addr + 1'b1;
             else begin           
-            // Next clock is active video 
-            if( (o_VGA_x == 799) && ( (o_VGA_y == 524) || (o_VGA_y < 480) ) )
-                o_pix_addr <= o_pix_addr + 1'b1;
-            // Next clock not active video 
-            else if(o_VGA_y >= 480)
-                o_pix_addr <= 0;
+                // Next clock is active video 
+                if( (o_VGA_x == 799) && ( (o_VGA_y == 524) || (o_VGA_y < 480) ) )
+                    o_pix_addr <= o_pix_addr + 1'b1;
+                // Next clock not active video 
+                else if(o_VGA_y >= 480)
+                    o_pix_addr <= 0;
             end
         end 
+        
         endcase
     
-    // Convert Q4.4 format fixed-point data back into an integer
-    // Since data was grayscaled, R, G, and B have the same intensity
+
     always @(*)
         begin
             if(o_VGA_video)
                 begin
-                    o_VGA_r = (i_pix_data >> 4); 
-                    o_VGA_g = (i_pix_data >> 4);
-                    o_VGA_b = (i_pix_data >> 4);
+                    o_VGA_r = (i_pix_data[3:0]); 
+                    o_VGA_g = (i_pix_data[3:0]);
+                    o_VGA_b = (i_pix_data[3:0]);
                 end
             else begin
                     o_VGA_r = 0; 

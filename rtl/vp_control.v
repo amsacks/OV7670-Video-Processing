@@ -13,7 +13,7 @@
  */
 
 module vp_control
-    #(  parameter DW = 12,
+    #(  parameter DW = 8,
         parameter RL = 640)    
     (
         input wire           i_clk,

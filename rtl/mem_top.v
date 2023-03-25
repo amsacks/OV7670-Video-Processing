@@ -10,7 +10,7 @@
  */
 
 module mem_top
-    #(  parameter DW = 12)
+    #(  parameter DW = 8)
     (  
         input wire i_clk, 
         input wire i_clk25m,
@@ -27,12 +27,12 @@ module mem_top
     );
     
     
-    // Control Handshake procedure 
+    // FSM to control handshake procedure 
     localparam IDLE = 0,
                 TRANSFER = 1;
-    reg state;
-    reg             r_bram_wr; 
-    reg [18: 0]     r_vp_addr; 
+    reg        state;
+    reg        r_bram_wr; 
+    reg [18:0] r_vp_addr; 
     
     always @(posedge i_clk)
     begin
@@ -50,7 +50,8 @@ module mem_top
                 o_data_ready <= 0; 
                 r_bram_wr    <= 0;
                 
-                if(i_data_valid) begin
+                if(i_data_valid) 
+                begin
                     state        <= TRANSFER;
                     r_bram_wr    <= 1'b1;
                     o_data_ready <= 1'b1; 

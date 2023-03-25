@@ -38,10 +38,10 @@ module top
     // vp_top to mem_top
     wire        w_mem_top_data_ready;
     wire        w_mem_top_data_valid;
-    wire [11:0] w_vp_top_data;
+    wire [7:0]  w_vp_top_data;
     
     // vga_top to mem_top
-    wire [11:0] w_vga_pix_data;
+    wire [7:0] w_vga_pix_data;
     wire [18:0] w_vga_pix_addr; 
            
     // Reset synchronizers for all clock domains
@@ -63,16 +63,14 @@ module top
     wire w_rstn_btn_db; 
     
     // Debounce top level button - invert reset to have debounced negedge reset
-    //240_000 when uploading to hardware, 10 when simulating in testbench
-    localparam DELAY_TOP_TB = 240_000;  
-    
+  
     debouncer 
-    #(  .DELAY(DELAY_TOP_TB)    )
+    #(  .DELAY(240_000)         )
     top_btn_db
     (
         .i_clk(i_top_clk        ),
         .i_btn_in(~i_top_rst    ),
-        .o_btn_db(w_rstn_btn_db  )
+        .o_btn_db(w_rstn_btn_db )
     ); 
     
     // Double FF for negedge reset synchronization 
@@ -91,94 +89,90 @@ module top
             if(!w_rstn_btn_db) {r2_rstn_pclk, r1_rstn_pclk} <= 0; 
             else               {r2_rstn_pclk, r1_rstn_pclk} <= {r1_rstn_pclk, 1'b1}; 
         end 
-
     
     // FPGA-camera interface
     cam_top 
-    #(  .CAM_CONFIG_CLK(100_000_000)    )
+    #(  .CAM_CONFIG_CLK(100_000_000)            )
     OV7670_cam
     (
-        .i_clk(i_top_clk                ),
-        .i_rstn_clk(r2_rstn_top_clk     ),
-        .i_rstn_pclk(r2_rstn_pclk       ),
+        .i_clk(i_top_clk                        ),
+        .i_rstn_clk(r2_rstn_top_clk             ),
+        .i_rstn_pclk(r2_rstn_pclk               ),
         
         // I/O for camera init
-        .i_cam_start(i_top_cam_start    ),
-        .o_cam_done(o_top_cam_done      ), 
+        .i_cam_start(i_top_cam_start            ),
+        .o_cam_done(o_top_cam_done              ), 
         
         // I/O camera
-        .i_pclk(i_top_pclk              ),
-        .i_pix_byte(i_top_pix_byte      ), 
-        .i_vsync(i_top_pix_vsync        ), 
-        .i_href(i_top_pix_href          ),
-        .o_reset(o_top_reset            ),
-        .o_pwdn(o_top_pwdn              ),
-        .o_siod(o_top_siod              ),
-        .o_sioc(o_top_sioc              ), 
+        .i_pclk(i_top_pclk                      ),
+        .i_pix_byte(i_top_pix_byte              ), 
+        .i_vsync(i_top_pix_vsync                ), 
+        .i_href(i_top_pix_href                  ),
+        .o_reset(o_top_reset                    ),
+        .o_pwdn(o_top_pwdn                      ),
+        .o_siod(o_top_siod                      ),
+        .o_sioc(o_top_sioc                      ), 
         
         // Handshake with vp_top
-        .i_data_ready(w_vp_top_data_ready),
-        .o_cam_data_valid(w_cam_top_data_valid),
-        .o_cam_data(w_cam_top_data)
+        .i_data_ready(w_vp_top_data_ready       ),
+        .o_cam_data_valid(w_cam_top_data_valid  ),
+        .o_cam_data(w_cam_top_data              )
     );
     
 
-    wire [11:0] w_sobel_thresh; 
+    wire [7:0] w_sobel_thresh; 
     
     top_user_control
     control_filters
     (
-        .i_clk(i_top_clk),
-        .i_rstn(r2_rstn_top_clk),
+        .i_clk(i_top_clk                            ),
+        .i_rstn(r2_rstn_top_clk                     ),
 
-        .i_inc_sobel_thresh(i_top_inc_sobel_thresh),
-        .i_dec_sobel_thresh(i_top_dec_sobel_thresh),
+        .i_inc_sobel_thresh(i_top_inc_sobel_thresh  ),
+        .i_dec_sobel_thresh(i_top_dec_sobel_thresh  ),
         
-        .o_sobel_thresh(w_sobel_thresh)
+        .o_sobel_thresh(w_sobel_thresh              )
     );
 
     vp_top
-    #(  .DW(12),
-        .RL(640)    ) 
+    #(  .DW(8                               ),
+        .RL(640)                            ) 
     videoprocessing_sobel
     (
-        .i_clk(i_top_clk),
-        .i_rstn(r2_rstn_top_clk),
+        .i_clk(i_top_clk                    ),
+        .i_rstn(r2_rstn_top_clk             ),
 
-        .i_threshold(w_sobel_thresh),
+        .i_threshold(w_sobel_thresh         ),
 
         // Handshake with cam_top
-        .o_data_ready(w_vp_top_data_ready),
-        .i_data_valid(w_cam_top_data_valid),
-        .i_data(w_cam_top_data),       
+        .o_data_ready(w_vp_top_data_ready   ),
+        .i_data_valid(w_cam_top_data_valid  ),
+        .i_data(w_cam_top_data              ),       
 
         // Handshake with mem_top
-        .i_data_ready(w_mem_top_data_ready),
-        .o_data_valid(w_mem_top_data_valid),
-        .o_data(w_vp_top_data)         
+        .i_data_ready(w_mem_top_data_ready  ),
+        .o_data_valid(w_mem_top_data_valid  ),
+        .o_data(w_vp_top_data               )         
     );
     
     mem_top
-    #(  .DW(12) )
+    #(  .DW(8)                              )
     memory
     (
-        .i_clk(i_top_clk), 
-        .i_rstn(r2_rstn_top_clk), 
+        .i_clk(i_top_clk                    ), 
+        .i_rstn(r2_rstn_top_clk             ), 
         
         // Handshake with vp_top
-        .o_data_ready(w_mem_top_data_ready),
-        .i_data_valid(w_mem_top_data_valid), 
-        .i_data(w_vp_top_data),
+        .o_data_ready(w_mem_top_data_ready  ),
+        .i_data_valid(w_mem_top_data_valid  ), 
+        .i_data(w_vp_top_data               ),
         
         // vga_top interface        
-        .i_clk25m(w_clk25m),
-        .i_vga_addr(w_vga_pix_addr),
-        .o_vga_data(w_vga_pix_data)
+        .i_clk25m(w_clk25m                  ),
+        .i_vga_addr(w_vga_pix_addr          ),
+        .o_vga_data(w_vga_pix_data          )
     ); 
-    
-    wire X; 
-    wire Y;
-    
+
     vga_top
     display_interface
     (
@@ -186,16 +180,16 @@ module top
         .i_rstn_clk25m(r2_rstn_clk25m  ), 
         
         // VGA timing signals
-        .o_VGA_x(X                     ),
-        .o_VGA_y(Y                     ), 
+        .o_VGA_x(                      ),
+        .o_VGA_y(                      ), 
         .o_VGA_vsync(o_top_vga_vsync   ),
         .o_VGA_hsync(o_top_vga_hsync   ), 
         .o_VGA_video(                  ),
         
         // VGA RGB Pixel Data
-        .o_VGA_r(o_top_vga_red          ),
-        .o_VGA_g(o_top_vga_green        ),
-        .o_VGA_b(o_top_vga_blue         ), 
+        .o_VGA_r(o_top_vga_red         ),
+        .o_VGA_g(o_top_vga_green       ),
+        .o_VGA_b(o_top_vga_blue        ), 
         
         // VGA read/write from/to BRAM
         .i_pix_data(w_vga_pix_data     ), 
